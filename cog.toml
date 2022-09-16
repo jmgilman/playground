@@ -1,0 +1,11 @@
+branch_whitelist = ["master"]
+
+[changelog]
+owner = "jmgilman"
+path = "CHANGELOG.md"
+remote = "github.com"
+repository = "playground"
+template = "remote"
+[[changelog.authors]]
+signature = "Joshua Gilman"
+username = "jmgilman"

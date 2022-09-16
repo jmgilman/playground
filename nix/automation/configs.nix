@@ -6,6 +6,28 @@ let
   l = nixpkgs.lib // builtins;
 in
 {
+  cocogitto = std.std.lib.mkNixago {
+    configData = {
+      branch_whitelist = [ "master" ];
+      changelog = {
+        authors = [
+          {
+            username = "jmgilman";
+            signature = "Joshua Gilman";
+          }
+        ];
+        path = "CHANGELOG.md";
+        template = "remote";
+        remote = "github.com";
+        repository = "playground";
+        owner = "jmgilman";
+      };
+    };
+    output = "cog.toml";
+    format = "toml";
+    hook.mode = "copy";
+    commands = [{ package = nixpkgs.cocogitto; }];
+  };
   conform = std.std.nixago.conform {
     configData = {
       commit = {
