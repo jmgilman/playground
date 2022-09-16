@@ -16,6 +16,9 @@ l.mapAttrs (_: std.std.lib.mkShell) {
       cell.configs.prettier
       cell.configs.treefmt
     ];
+    packages = [
+      nixpkgs.gh
+    ];
     commands = [
       {
         name = "fmt";
