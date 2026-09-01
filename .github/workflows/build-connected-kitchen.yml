@@ -1,0 +1,74 @@
+name: Build Connected Kitchen 1.20.1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CI: "true"
+    steps:
+      - name: Check out build files
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Reassemble and verify source archive
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cat \
+            connected-kitchen-build/source.part00 \
+            connected-kitchen-build/source.part01 \
+            connected-kitchen-build/source.part02 \
+            connected-kitchen-build/source.part03 \
+            connected-kitchen-build/source.part04 \
+            connected-kitchen-build/source.part05a \
+            connected-kitchen-build/source.part05b0 \
+            connected-kitchen-build/source.part05b1 \
+            connected-kitchen-build/source.part05b2 \
+            connected-kitchen-build/source.part05b3 \
+            > connected-kitchen-source.b64
+          base64 --decode connected-kitchen-source.b64 > connected-kitchen-source.zip
+          echo "9c61ef20cdc16b992194bafce67e01e89bb4988200507127409922ca98dbc03d  connected-kitchen-source.zip" | sha256sum --check
+          unzip -q connected-kitchen-source.zip
+          sed -i '/disableRecompilation = true/d' connected-kitchen/build.gradle
+          find connected-kitchen/src/main/java -name '*.java' -exec sed -i \
+            -e '/import org.jetbrains.annotations.Nullable;/d' \
+            -e '/^[[:space:]]*@Nullable$/d' {} +
+          sed -i '/import net.minecraft.world.inventory.ChestMenu;/a import net.minecraft.world.inventory.MenuType;' \
+            connected-kitchen/src/main/java/com/drcompress/connectedkitchen/blockentity/KitchenStoveBlockEntity.java
+          sed -i 's@return ChestMenu.oneRow(containerId, playerInventory, this);@return new ChestMenu(MenuType.GENERIC_9x1, containerId, playerInventory, this, 1);@' \
+            connected-kitchen/src/main/java/com/drcompress/connectedkitchen/blockentity/KitchenStoveBlockEntity.java
+          sed -i 's@SoundEvents.UI_BUTTON_CLICK,@SoundEvents.UI_BUTTON_CLICK.value(),@' \
+            connected-kitchen/src/main/java/com/drcompress/connectedkitchen/menu/RecipeCatalogContainer.java
+
+      - name: Add the official NeoForge 1.20.1 Gradle wrapper
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 https://github.com/NeoForgeMDKs/MDK-Forge-1.20.1-ModDevGradle.git /tmp/neoforge-mdk
+          cp /tmp/neoforge-mdk/gradlew /tmp/neoforge-mdk/gradlew.bat connected-kitchen/
+          mkdir -p connected-kitchen/gradle
+          cp -R /tmp/neoforge-mdk/gradle/wrapper connected-kitchen/gradle/
+          chmod +x connected-kitchen/gradlew
+
+      - name: Build production JAR
+        working-directory: connected-kitchen
+        shell: bash
+        run: ./gradlew build --stacktrace --no-daemon
+
+      - name: Upload production JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: connected-kitchen-1.20.1-neoforge
+          path: connected-kitchen/build/libs/*.jar
+          if-no-files-found: error
