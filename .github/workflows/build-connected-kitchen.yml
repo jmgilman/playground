@@ -1,12 +1,6 @@
 name: Build Connected Kitchen 1.20.1
 
 on:
-  push:
-    branches:
-      - chatgpt/connected-kitchen-1.20.1
-  pull_request:
-    branches:
-      - master
   workflow_dispatch:
 
 permissions:
