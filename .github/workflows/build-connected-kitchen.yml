@@ -46,6 +46,7 @@ jobs:
           base64 --decode connected-kitchen-source.b64 > connected-kitchen-source.zip
           echo "9c61ef20cdc16b992194bafce67e01e89bb4988200507127409922ca98dbc03d  connected-kitchen-source.zip" | sha256sum --check
           unzip -q connected-kitchen-source.zip
+          sed -i '/disableRecompilation = true/d' connected-kitchen/build.gradle
 
       - name: Add the official NeoForge 1.20.1 Gradle wrapper
         shell: bash
