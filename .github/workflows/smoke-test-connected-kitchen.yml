@@ -1,0 +1,113 @@
+name: Smoke Test Connected Kitchen 1.20.1
+
+on:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  dedicated-server-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download the successfully compiled mod JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: connected-kitchen-1.20.1-neoforge
+          path: compiled-mod
+          repository: jmgilman/playground
+          run-id: "33457700038"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install a clean NeoForge 47.1.106 server
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p server
+          curl --fail --location --retry 3 \
+            https://maven.neoforged.net/releases/net/neoforged/forge/1.20.1-47.1.106/forge-1.20.1-47.1.106-installer.jar \
+            --output server/neoforge-installer.jar
+          cd server
+          java -jar neoforge-installer.jar --installServer
+          rm neoforge-installer.jar
+          mkdir -p mods
+          cp ../compiled-mod/*.jar mods/
+          printf 'eula=true\n' > eula.txt
+          cat > server.properties <<'EOF'
+          online-mode=false
+          server-port=25565
+          level-name=smoke-world
+          level-type=minecraft:flat
+          generate-structures=false
+          spawn-animals=false
+          spawn-monsters=false
+          view-distance=2
+          simulation-distance=2
+          max-tick-time=-1
+          sync-chunk-writes=false
+          EOF
+          chmod +x run.sh
+
+      - name: Start server and verify Connected Kitchen loads
+        working-directory: server
+        shell: bash
+        run: |
+          set -uo pipefail
+          setsid ./run.sh nogui > smoke-server.log 2>&1 &
+          server_pid=$!
+          ready=0
+          for second in $(seq 1 150); do
+            if grep -q 'Done (' smoke-server.log logs/latest.log 2>/dev/null; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          cat smoke-server.log || true
+          cat logs/latest.log || true
+
+          loaded=0
+          if grep -Rqi 'connectedkitchen' logs smoke-server.log 2>/dev/null; then
+            loaded=1
+          fi
+
+          kill -INT -- "-$server_pid" 2>/dev/null || true
+          sleep 5
+          kill -TERM -- "-$server_pid" 2>/dev/null || true
+          sleep 2
+          kill -KILL -- "-$server_pid" 2>/dev/null || true
+
+          if [ "$ready" -ne 1 ]; then
+            echo 'NeoForge server did not reach the ready state.' >&2
+            exit 1
+          fi
+          if [ "$loaded" -ne 1 ]; then
+            echo 'Server started, but Connected Kitchen was not found in its logs.' >&2
+            exit 1
+          fi
+          echo 'Connected Kitchen loaded successfully on a clean NeoForge 47.1.106 dedicated server.'
+
+      - name: Upload server smoke-test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: connected-kitchen-server-smoke-logs
+          path: |
+            server/smoke-server.log
+            server/logs/latest.log
+            server/logs/debug.log
+          if-no-files-found: warn
